@@ -1,0 +1,303 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("Daily Numbers")
+Gui.Form..Size(5955,3180)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.txtDailyNumber.Create(TextBoxR)
+Gui.Form.txtDailyNumber.Size(5415,2295)
+Gui.Form.txtDailyNumber.Position(165,120)
+Program.Sub.ScreenSU.End
+Program.Sub.Preflight.Start
+v.Global.sDefaultProcessFolder.Declare
+v.Global.sAttach.Declare
+v.Global.sLog.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, Mar 2019
+'Customer: P & S Machine & Fabrication
+'send Managers Daily Numbers which include:
+
+'1/All orders entered the day before with a due on or before the 15th of the following month.
+'Orders Entered $XXX.XX
+
+'2/Total amount Invoiced from the previous day.
+'Invoiced $XXX.XX
+
+'3/Total amount due on our open order report of items due on or before the 15 of the following month.
+'Open Order thru 04-15-19  $XXX.XX
+
+'4/Total Amount That was entered into Accruals for Payables on the previous day.
+'Payables $XXX.XX
+
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	
+	f.ODBC.Connection!conx.OpenCompanyConnection
+	'Create default folder for log file
+	f.Intrinsic.Control.CallSub("Check_And_Create_Custom_Folder","sProject","DailyFlash")
+	'Process
+	f.Intrinsic.Control.CallSub("Process")
+
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)	
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+
+Program.Sub.Main.End
+
+Program.Sub.Process.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	v.Local.dToday.Declare
+	v.Local.dYesterday.Declare
+	v.Local.dDay15ofNextMonth.Declare
+	v.Local.dHold.Declare
+	v.Local.sNextMonth.Declare
+	v.Local.sYear.Declare
+	
+	v.Local.sOrderEntered.Declare
+	v.Local.sInvoiced.Declare
+	v.Local.sOpenOrderTil15NextMonth.Declare
+	v.Local.sPayable.Declare
+	v.Local.sSender.Declare
+	v.Local.sBody.Declare
+	v.Local.sFilter.Declare
+	v.Local.sHold.Declare
+	v.Local.sRet.Declare
+	v.Local.sSubject.Declare
+	
+	v.Local.iCnt.Declare
+	v.Local.bValidEmail.Declare
+	v.Local.iUser.Declare
+	
+	v.Local.bSendEmail.Declare		
+	v.Local.iDayCheck.Declare
+	
+	'Check today, if today is Saturday(day 7) or Sundday(day 1), will not send email
+	f.Intrinsic.Date.Weekday(v.Ambient.Date,v.Local.iDayCheck)
+	f.Intrinsic.Control.If(v.Local.iDayCheck,=,7,or,v.Local.iDayCheck,=,1)
+		v.Local.bSendEmail.Set(True)
+	f.Intrinsic.Control.Else
+		v.Local.bSendEmail.Set(False)
+	f.Intrinsic.Control.EndIf	
+	
+	'If today is Monday (day 2), consider as if today is Saturday, so that the program will pick Friday data
+	f.Intrinsic.Control.If(v.Local.iDayCheck,=,2)
+		v.Local.dToday.Set(v.Ambient.Date)
+		f.Intrinsic.Date.DateAdd("D",-2,v.Local.dToday,v.Local.dToday)	
+	f.Intrinsic.Control.Else
+		v.Local.dToday.Set(v.Ambient.Date)	
+	f.Intrinsic.Control.EndIf
+	
+	
+	f.Intrinsic.UI.InvokeWaitDialog("Process...")
+	'Yesterday
+	f.Intrinsic.Date.DateAdd("D",-1,v.Local.dToday,v.Local.dYesterday)
+	f.Intrinsic.String.Format(v.Local.dYesterday,"MM-DD-YYYY",v.Local.sHold)
+	f.Intrinsic.String.Build("Daily Numbers {0}",v.Local.sHold,v.Local.sSubject)
+	
+	'Calculate dDay15ofNextMonth
+	f.Intrinsic.Date.DateAdd("M",1,v.Local.dToday,v.Local.dHold)
+	f.Intrinsic.Date.Month(v.Local.dHold,v.Local.sNextMonth)
+	f.Intrinsic.Date.Year(v.Local.dHold,v.Local.sYear)
+	f.Intrinsic.Date.DateSerial(v.Local.sYear,v.Local.sNextMonth,15,v.Local.dDay15ofNextMonth)
+	
+	'1/Order Entered: All orders entered the day before with a due on or before the 15th of the following month.
+	f.Intrinsic.Control.If(v.DataTable.Ord1.Exists)
+		f.Data.DataTable.Close("Ord1")	
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.String.Build("select b.Order_No, b.Order_Line, b.Date_Order, b.Total_Dollars from V_Order_Booking b where  b.Date_Order = '{0}' order by b.Order_no",v.Local.dYesterday.PervasiveDate,v.Local.sSQL)
+	f.Data.DataTable.CreateFromSQL("Ord1","conx",v.Local.sSQL,True)
+	f.Data.DataTable.AddColumn("Ord1","Date_Item_Prom","Date","1900-01-01")
+	
+	f.Intrinsic.Control.For(v.Local.iCnt,0,v.DataTable.Ord1.RowCount--,1)
+		'Look up Order_lines
+		f.Intrinsic.String.Build("Select Date_Item_Prom from V_Order_Lines where Order_No = '{0}' and Record_No = '{1}'",v.DataTable.Ord1(v.Local.iCnt).Order_No!FieldValString,v.DataTable.Ord1(v.Local.iCnt).Order_Line!FieldValString,v.Local.sSQL)
+		f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+		f.Intrinsic.Control.If(v.Local.sRet,<>,"")
+			f.Intrinsic.String.Format(v.Local.sRet,"MM/DD/YYYY",v.Local.sRet)
+			f.Data.DataTable.SetValue("Ord1",v.Local.iCnt,"Date_Item_Prom",v.Local.sRet)
+		f.Intrinsic.Control.Else
+			'Look up Shipment_Lines
+			
+			f.Intrinsic.String.Build("Select DATE_ITEM_PROMISE from V_SHIPMENT_LINES where Order_No = '{0}' and Order_Rec = '{1}'",v.DataTable.Ord1(v.Local.iCnt).Order_No!FieldValString,v.DataTable.Ord1(v.Local.iCnt).Order_Line!FieldValString,v.Local.sSQL)
+			f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+			f.Intrinsic.Control.If(v.Local.sRet,<>,"")
+				f.Intrinsic.String.Format(v.Local.sRet,"MM/DD/YYYY",v.Local.sRet)
+				f.Data.DataTable.SetValue("Ord1",v.Local.iCnt,"Date_Item_Prom",v.Local.sRet)
+			f.Intrinsic.Control.Else
+				'Look up Order_Hist_Line
+				f.Intrinsic.String.Build("Select DATE_ORDER_DUE from V_Order_Hist_Line where Order_No = '{0}' and Order_Line = '{1}'",v.DataTable.Ord1(v.Local.iCnt).Order_No!FieldValString,v.DataTable.Ord1(v.Local.iCnt).Order_Line!FieldValString,v.Local.sSQL)
+				f.Intrinsic.Control.If(v.Local.sRet,<>,"")
+					f.Intrinsic.String.Format(v.Local.sRet,"MM/DD/YYYY",v.Local.sRet)
+					f.Data.DataTable.SetValue("Ord1",v.Local.iCnt,"Date_Item_Prom",v.Local.sRet)
+				f.Intrinsic.Control.Else
+					f.Data.DataTable.SetValue("Ord1",v.Local.iCnt,"Date_Item_Prom","01/01/1900")
+				f.Intrinsic.Control.EndIf
+			f.Intrinsic.Control.EndIf
+		f.Intrinsic.Control.EndIf
+	f.Intrinsic.Control.Next(v.Local.iCnt)
+	
+	f.Intrinsic.String.Format(v.Local.dDay15ofNextMonth,"MM/DD/YYYY",v.Local.sHold)
+	f.Intrinsic.String.Build("Date_Item_Prom <= #{0}# and Date_Item_Prom <> #01/01/1900#",v.Local.sHold,v.Local.sFilter)
+	f.Data.DataTable.Compute("Ord1","Sum([Total_Dollars])",v.Local.sFilter,v.Local.sOrderEntered)	
+	f.Intrinsic.String.Format(v.Local.sOrderEntered,"##,###,###,##0.00",v.Local.sOrderEntered)
+	
+	'2/Invoiced $XXX.XX : Total amount Invoiced from the previous day
+	f.Intrinsic.String.Build("select sum(EXTENSION) as Invoiced from V_Order_Hist_Line where  Date_Invoice = '{0}'",v.Local.dYesterday.PervasiveDate,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sInvoiced)
+	f.Intrinsic.String.Format(v.Local.sInvoiced,"##,###,###,##0.00",v.Local.sInvoiced)
+	
+	'3/Open Order thru 15 of next month:  $XXX.XX: Total amount due on our open order report of items due on or before the 15 of the following month.
+	f.Intrinsic.String.Build("select sum(EXTENSION) as OpenOrderTil15 from V_Order_Lines where  Date_item_Prom <= '{0}' and Date_Order < '{1}'",v.Local.dDay15ofNextMonth.PervasiveDate,v.Local.dToday.PervasiveDate,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sOpenOrderTil15NextMonth)
+	f.Intrinsic.String.Format(v.Local.sOpenOrderTil15NextMonth,"##,###,###,##0.00",v.Local.sOpenOrderTil15NextMonth)
+	
+	'4/Payables $XXX.XX: Total Amount That was entered into Accruals for Payables on the previous day.
+	f.Intrinsic.String.Build("select sum(AMT_Invoice) as PayableAmt from v_AP_OPEN_ITEMS where  Date_Invoice = '{0}'",v.Local.dYesterday.PervasiveDate,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sPayable)
+	f.Intrinsic.String.Format(v.Local.sPayable,"##,###,###,##0.00",v.Local.sPayable)	
+	
+	f.Intrinsic.String.build("Orders Entered: $ {1}{0}Invoiced: $ {2}{0}Open Orders thru {5}:  $ {3}{0}Payables: $ {4}",v.Ambient.NewLine,v.Local.sOrderEntered,v.Local.sInvoiced,v.Local.sOpenOrderTil15NextMonth,v.Local.sPayable,v.Local.dDay15ofNextMonth,v.Local.sBody)		
+
+	'Open from Menu item
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		gui.Form..Caption(v.Local.sSubject)
+		gui.Form.txtDailyNumber.Text(v.Local.sBody)
+		gui.Form..Show
+		f.Intrinsic.UI.CloseWaitDialog
+		f.Intrinsic.Control.ExitSub			
+	f.Intrinsic.Control.EndIf	
+	
+	'Check if to send email or not
+	f.Intrinsic.Control.If(v.Local.bSendEmail.Not)
+		f.Intrinsic.UI.CloseWaitDialog
+		f.Intrinsic.Control.ExitSub	
+	f.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.UI.ChangeWaitStatus("Sending Email")
+	'Get Sender Email
+	f.ODBC.Connection!conx.ExecuteAndReturn("Select Top 1 Email From GCG_5623_DailyFlash_Email where Name = '~Sender~'",v.Local.sSender)
+	f.Global.Messaging.IsAddressValid(v.Local.sSender,v.Local.bValidEmail)
+	f.Intrinsic.Control.If(v.Local.bValidEmail.Not)
+		v.Local.sError.Set("Invalid Sender Email")
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf	
+	
+	'Send emails
+	f.Intrinsic.Control.If(v.DataTable.Emails.Exists)
+		f.Data.DataTable.Close("Emails")
+	f.Intrinsic.Control.EndIf
+	f.Data.DataTable.CreateFromSQL("Emails","conx","Select Name,Email From GCG_5623_DailyFlash_Email where Name <> '~Sender~' order by Name",True)
+	f.Intrinsic.Control.For(v.Local.iCnt,0,v.DataTable.Emails.RowCount--,1)			
+		
+		f.Global.Messaging.IsAddressValid(v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.Local.bValidEmail)
+		f.Intrinsic.Control.If(v.Local.bValidEmail.Not)
+			f.Intrinsic.String.Build("Invalid Manager Email: {0}",v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.Local.sError)
+			f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+		f.Intrinsic.Control.EndIf
+		'Send msg
+		F.Global.Security.GetUserID(v.Caller.User,v.Caller.CompanyCode,v.Local.iUser)
+'		F.Global.Messaging.CreateEMMessage(v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.DataTable.Emails(v.Local.iCnt).Name!FieldValTrim,v.Local.sSender,"","Daily Flash Report",v.Local.sBody,"",False)		
+		F.Global.Messaging.QueueMessage(V.Caller.CompanyCode,V.Local.iUser,"DailyFlash",v.Local.sSubject,V.Local.sSender,v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.Local.sBody)
+		
+		
+	f.Intrinsic.Control.Next(v.Local.iCnt)
+	f.Intrinsic.UI.CloseWaitDialog
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)	
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Process.End
+
+Program.Sub.UnLoad.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.conx.State,=,1)
+		F.ODBC.Connection!conx.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.UnLoad.End
+
+Program.Sub.Check_And_Create_Custom_Folder.Start
+'v.Args.sProject
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.bEx.Declare
+	v.Local.sProjectFolder.Declare
+	v.Local.sCustomDir.Declare
+	v.Local.sCompanyCodeFolder.Declare
+	
+	'Global\Custom\Project#\CompanyCode
+	
+	'Check Custom folder
+	f.Intrinsic.String.Build("{0}\Custom",V.Caller.GlobalDir,v.Local.sCustomDir)
+	f.Intrinsic.File.DirExists(v.Local.sCustomDir,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sCustomDir)
+	f.Intrinsic.Control.EndIf
+	
+	'Check Project folder 
+	f.Intrinsic.String.Build("{0}\Custom\{1}",V.Caller.GlobalDir,v.Args.sProject,v.Local.sProjectFolder)
+	f.Intrinsic.File.DirExists(v.Local.sProjectFolder,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sProjectFolder)
+	f.Intrinsic.Control.EndIf
+	
+	'Check CompanyCode folder
+	f.Intrinsic.String.Build("{0}\Custom\{1}\{2}",V.Caller.GlobalDir,v.Args.sProject,v.Caller.CompanyCode,v.Local.sCompanyCodeFolder)
+	f.Intrinsic.File.DirExists(v.Local.sCompanyCodeFolder,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sCompanyCodeFolder)
+	f.Intrinsic.Control.EndIf	
+	
+	'Set Default Process folder
+	f.Intrinsic.String.Build("{0}",v.Local.sCompanyCodeFolder,v.Global.sDefaultProcessFolder)
+	f.Intrinsic.String.Build("{0}\Log_{1}.txt",v.Local.sCompanyCodeFolder,v.Ambient.Now.FormatMMDDYYHHNNSS,v.Global.sLog)	
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Check_And_Create_Custom_Folder.End
+Program.Sub.Form_UnLoad.Start
+f.Intrinsic.Control.CallSub("Unload")
+Program.Sub.Form_UnLoad.End
+
+
