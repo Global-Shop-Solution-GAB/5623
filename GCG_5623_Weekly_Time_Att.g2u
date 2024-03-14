@@ -1,0 +1,680 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Size(20910,12210)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form..Caption("Weekly Time Attendance")
+Gui.Form.gsTime.Create(GsGridControl)
+Gui.Form.gsTime.Size(20610,10245)
+Gui.Form.gsTime.Position(75,1095)
+Gui.Form.dtpStart.Create(DatePicker)
+Gui.Form.dtpStart.Size(1935,285)
+Gui.Form.dtpStart.Position(3315,525)
+Gui.Form.dtpStart.Enabled(False)
+Gui.Form.dtpEnd.Create(DatePicker)
+Gui.Form.dtpEnd.Size(1935,285)
+Gui.Form.dtpEnd.Position(5580,525)
+Gui.Form.dtpEnd.Enabled(False)
+Gui.Form.lbl1.Create(Label,"Monday",True,1050,255,0,3360,255,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl2.Create(Label,"Sunday",True,1125,255,0,5565,255,True,0,"Arial",8,-2147483633,0)
+Gui.Form.cmdLoad.Create(Button)
+Gui.Form.cmdLoad.Size(855,375)
+Gui.Form.cmdLoad.Position(7785,510)
+Gui.Form.cmdLoad.Caption("Load")
+Gui.Form.cmdLoad.Event(Click,cmdLoad_Click)
+Gui.Form.cmdExport.Create(Button)
+Gui.Form.cmdExport.Size(855,375)
+Gui.Form.cmdExport.Position(8925,525)
+Gui.Form.cmdExport.Caption("Export")
+Gui.Form.cmdExport.Event(Click,cmdExport_Click)
+Gui.Form.lbl3.Create(Label,"Select a Date",True,1575,255,0,360,255,True,0,"Arial",8,-2147483633,0)
+Gui.Form.dtpDateSelected.Create(DatePicker)
+Gui.Form.dtpDateSelected.Size(1935,285)
+Gui.Form.dtpDateSelected.Position(420,525)
+Gui.Form.dtpDateSelected.Event(Change,dtpDateSelected_Change)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.sDefaultProcessFolder.Declare
+v.Global.sAttach.Declare
+v.Global.sLog.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, Mar 2019
+'Customer: P & S Machine & Fabrication
+'This project will pull a weekly time attendance from Time_Attendance base on user week selection
+'The data to be displayed will be Employee,Shift,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday,Total,Regular,OverTime (more than 40 hours),HOL,VAC,SICK,BONUS
+'Pull records where Paid = 'Y'
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	
+	f.ODBC.Connection!conx.OpenCompanyConnection
+	
+	'Custom folder will be Global\Custom\WeeklyTimeAtt\Companycode where we will save the Log (used if attached to Task Scheduler)
+	f.Intrinsic.Control.CallSub("Check_And_Create_Custom_Folder","sProject","WeeklyTimeAtt")
+	
+	'Set Anchor:	0 - None   		1 - Top     	2 - Bottom  		4 - Left 		8 - Right
+	gui.Form.gsTime.Anchor(15)
+	
+	'Set default date selected to today
+	gui.Form.dtpDateSelected.Value(v.Ambient.Date)	
+	'Get Days of the week based on the day selected
+	f.Intrinsic.Control.CallSub("Get_Monday_Sunday")	
+
+	'Based on the caller (called from menu item or called from Task Scheduler)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		'From Menu item
+		gui.Form..Show
+	f.Intrinsic.Control.Else
+		'From Task Scheduler
+		f.Intrinsic.Control.CallSub("cmdLoad_click")
+		f.Intrinsic.Control.CallSub("cmdExport_click")
+		f.Intrinsic.Control.CallSub("Send_Emails")
+		f.Intrinsic.Control.CallSub("Unload")
+	f.Intrinsic.Control.EndIf		
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)	
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		'This is when run from a custom menu item in which the Menu Flag is set to O
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		'This case is when running with the Task Scheduler
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+
+Program.Sub.Main.End
+
+Program.Sub.Form_UnLoad.Start
+f.Intrinsic.Control.CallSub("Unload")
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.UnLoad.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.conx.State,=,1)
+		F.ODBC.Connection!conx.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.UnLoad.End
+
+Program.Sub.Send_Emails.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare	
+	v.Local.sEmails.Declare
+	v.Local.sSender.Declare	
+	v.Local.sSubject.Declare
+	v.Local.sStart.Declare
+	v.Local.sEnd.Declare	
+	v.Local.iUser.Declare
+	v.Local.iCnt.Declare	
+	v.Local.bValidEmail.Declare
+	
+	'Set Start day and End day
+	f.Intrinsic.String.Format(v.Screen.Form!dtpStart.Value,"MM-DD-YYYY",v.Local.sStart)
+	f.Intrinsic.String.Format(v.Screen.Form!dtpEnd.Value,"MM-DD-YYYY",v.Local.sEnd)
+	
+	'Build Subject
+	f.Intrinsic.String.Build("Weeky Time Attendance {0} thru {1}",v.Local.sStart,v.Local.sEnd,v.Local.sSubject)
+	
+	'Get Sender Email from Maintenance table GCG_5623_Weekly_Emails
+	f.ODBC.Connection!conx.ExecuteAndReturn("Select Top 1 Email From GCG_5623_Weekly_Emails where Name = '~Sender~'",v.Local.sSender)
+	'Validate Sender email
+	f.Global.Messaging.IsAddressValid(v.Local.sSender,v.Local.bValidEmail)
+	f.Intrinsic.Control.If(v.Local.bValidEmail.Not)
+		f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+			'This is when run from a custom menu item in which the Menu Flag is set to O
+			F.Intrinsic.UI.Msgbox("Invalid Sender Email")
+		f.Intrinsic.Control.Else
+			'This case is when running with the Task Scheduler
+			f.Intrinsic.File.String2File(v.Global.sLog,"Invalid Sender Email")
+		f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.EndIf	
+	
+	'Get Manager Emails to send email to
+	f.Intrinsic.Control.If(v.DataTable.Emails.Exists)
+		f.Data.DataTable.Close("Emails")
+	f.Intrinsic.Control.EndIf
+	f.Data.DataTable.CreateFromSQL("Emails","conx","Select Name,Email From GCG_5623_Weekly_Emails where Name <> '~Sender~' order by Name",True)
+	'For each email address, validate and send email
+	f.Intrinsic.Control.For(v.Local.iCnt,0,v.DataTable.Emails.RowCount--,1)	
+		'Validate
+		f.Global.Messaging.IsAddressValid(v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.Local.bValidEmail)
+		f.Intrinsic.Control.If(v.Local.bValidEmail.Not)
+			f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+				'This is when run from a custom menu item in which the Menu Flag is set to O
+				f.Intrinsic.String.Build("Invalid Manager Email: {0}",v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.Local.sError)
+				F.Intrinsic.UI.Msgbox(v.Local.sError)
+			f.Intrinsic.Control.Else
+				'This case is when running with the Task Scheduler					
+				f.Intrinsic.String.Build("Invalid Manager Email: {0}",v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.Local.sError)
+				f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+				f.Intrinsic.Control.Next(v.Local.iCnt)				
+			f.Intrinsic.Control.EndIf	
+		f.Intrinsic.Control.EndIf		
+
+		'Create email to be sent by courier	
+		F.Global.Security.GetUserID(v.Caller.User,v.Caller.CompanyCode,v.Local.iUser)
+		F.Global.Messaging.QueueMessage(v.Caller.CompanyCode,v.Local.iUser,"WeeklyAtt",v.Local.sSubject,v.Local.sSender,v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,"",5,,False,,,,,,,,v.Global.sAttach,False)
+		
+		'Alternative functions just in case others do not work
+		'F.Global.Messaging.CreateEMMessage(v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,"",v.Local.sSender,"Bao",v.Local.sSubject,"",v.Global.sAttach,False)
+		'F.Global.Messaging.QueueMessage(V.Caller.CompanyCode,V.Local.iUser,"WeeklyAtt",v.Local.sSubject,V.Local.sSender,"baonguyentexas@gmail.com","",v.Global.sAttach,False)		
+	f.Intrinsic.Control.Next(v.Local.iCnt)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)	
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Send_Emails.End
+
+Program.Sub.dtpDateSelected_Change.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	
+	f.Intrinsic.Control.CallSub("Get_Monday_Sunday")
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.dtpDateSelected_Change.End
+
+Program.Sub.Get_Monday_Sunday.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.dEndOfWeek.Declare
+	v.Local.dStartOfWeek.Declare
+	v.Local.dDateSelected.Declare
+	v.Local.iWeekDay.Declare
+	
+	'Set date selected
+	v.Local.dDateSelected.Set(v.Screen.Form!dtpDateSelected.Value)
+	
+	'If selected Sunday
+	f.Intrinsic.Date.Weekday(v.Local.dDateSelected,v.Local.iWeekDay)
+	f.Intrinsic.Control.If(v.Local.iWeekDay,=,1)
+		f.Intrinsic.Date.DateAdd("D",-1,v.Local.dDateSelected,v.Local.dDateSelected)
+	f.Intrinsic.Control.EndIf
+	
+	'Start and end of the week
+	f.Intrinsic.Date.EndOfWeek(v.local.dDateSelected,v.Local.dEndOfWeek)
+	f.Intrinsic.Date.BeginningOfWeek(v.local.dDateSelected,v.Local.dStartOfWeek)
+	
+	'Start is Mon, End is Sun
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dEndOfWeek,v.Local.dEndOfWeek)
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dStartOfWeek,v.Local.dStartOfWeek)
+	
+	'Set Monday and Sunday back to the screen
+	gui.Form.dtpStart.Value(v.Local.dStartOfWeek)
+	gui.Form.dtpEnd.Value(v.Local.dEndOfWeek)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Get_Monday_Sunday.End
+
+Program.Sub.cmdLoad_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.dEndOfWeek.Declare
+	v.Local.dStartOfWeek.Declare
+	v.Local.sSQL.Declare
+	v.Local.sFilter.Declare
+	v.Local.dDate1.Declare
+	v.Local.dDate2.Declare
+	v.Local.dDate3.Declare
+	v.Local.dDate4.Declare
+	v.Local.dDate5.Declare
+	v.Local.dDate6.Declare
+	v.Local.dDate7.Declare
+	
+	v.Local.sHold.Declare
+	
+	v.Local.iCnt.Declare
+	v.Local.iDay.Declare
+	
+	v.Local.sDay.Declare
+	v.Local.sDayColumn.Declare
+
+	v.Local.dStartOfWeek.Set(v.Screen.Form!dtpStart.Value)
+	v.Local.dEndOfWeek.Set(v.Screen.Form!dtpEnd.Value)
+	
+	v.Local.fHold.Declare
+	v.Local.fHours_HH.Declare
+	v.Local.fHours_MM.Declare
+	v.Local.fHours.Declare
+	v.Local.sHours.Declare
+	v.Local.dDateHold.Declare
+	
+	v.Local.dDate1.Set(v.Local.dStartOfWeek)
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dDate1,v.Local.dDate2)
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dDate2,v.Local.dDate3)
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dDate3,v.Local.dDate4)
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dDate4,v.Local.dDate5)
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dDate5,v.Local.dDate6)
+	f.Intrinsic.Date.DateAdd("D",1,v.Local.dDate6,v.Local.dDate7)
+	
+	f.Intrinsic.Control.If(v.DataTable.TimeAtt.Exists)
+		f.Data.DataTable.Close("TimeAtt")
+	f.Intrinsic.Control.EndIf
+	f.Intrinsic.String.Build("select EMPLOYEE,CHARGE_DATE,ACTUAL_DATE,NAME,DEPT,SHIFT,REC_GROUP,REC_TYPE,EARNINGS_CODE,PAID,EXCUSED,ABSENCE_DESC,CLOCKED_IN,IsNull(HOURS_HH,0) as Hours_HH,Isnull(HOURS_MM,0) as HOURS_MM from TIME_ATTENDANCE where (Convert(Charge_date,SQL_Integer) between {0} and {1} ) and Paid = 'Y' Order By Employee",v.Local.dStartOfWeek.formatYYYYMMDD,v.Local.dEndOfWeek.formatYYYYMMDD,v.Local.sSQL)
+	
+	f.Data.DataTable.CreateFromSQL("TimeAtt","conx",v.Local.sSQL,True)
+	f.Data.DataView.Create("TimeAtt","TimeAttDV")
+	
+	'WeekTime based on Employee MSTR
+	f.Intrinsic.Control.If(v.DataTable.WeekTime.Exists)
+		f.Data.DataTable.Close("WeekTime")
+	f.Intrinsic.Control.EndIf	
+	f.Data.DataTable.CreateFromSQL("WeekTime","conx","select Employee,Name,Shift,Dept_Employee from Employee_Mstr order by Employee",True)	
+
+	f.Data.DataTable.AddColumn("WeekTime","Seq","Long",0)
+	f.Data.DataTable.AddColumn("WeekTime","Day1","float")
+	f.Data.DataTable.AddColumn("WeekTime","Day2","float")
+	f.Data.DataTable.AddColumn("WeekTime","Day3","float")
+	f.Data.DataTable.AddColumn("WeekTime","Day4","float")
+	f.Data.DataTable.AddColumn("WeekTime","Day5","float")
+	f.Data.DataTable.AddColumn("WeekTime","Day6","float")
+	f.Data.DataTable.AddColumn("WeekTime","Day7","float")
+	
+	'02-HOL, 03-VAC, 04-SICK, 05-BONUS
+	f.Data.DataTable.AddColumn("WeekTime","HOL","float")
+	f.Data.DataTable.AddColumn("WeekTime","VAC","float")
+	f.Data.DataTable.AddColumn("WeekTime","SICK","float")
+	f.Data.DataTable.AddColumn("WeekTime","BONUS","float")	
+
+	
+	F.Data.DataTable.SetSeries("WeekTime","Seq",1,1)
+	
+	f.Intrinsic.Control.For(v.Local.iCnt,0,v.DataTable.WeekTime.RowCount--,1)		
+		f.Intrinsic.Control.For(v.Local.iDay,1,7,1)
+		 	f.Intrinsic.String.Build("dDate{0}",v.Local.iDay,v.Local.sDay)
+		 	f.Intrinsic.String.Build("Day{0}",v.Local.iDay,v.Local.sDayColumn)
+		 	f.Intrinsic.String.Format(v.Local.[v.Local.sDay],"MM/DD/YYYY",v.Local.sDay)
+		 	v.Local.dDateHold.Set(v.Local.sDay)
+			f.Intrinsic.String.Build("Employee = '{0}' and Charge_date = '{1}'",v.DataTable.WeekTime(v.Local.iCnt).Employee!FieldValString,v.Local.dDateHold.FormatYYYYMMDD,v.Local.sFilter)
+			f.Data.DataTable.Compute("TimeAtt","Sum([Hours_HH]) + (Sum([Hours_MM])/60)",v.Local.sFilter,v.Local.fHours)
+			f.Intrinsic.Control.If(v.Local.fHours,<>,0)				
+				f.Intrinsic.String.Format(v.Local.fHours,"0.00",v.Local.sHours)
+				f.Data.DataTable.SetValue("WeekTime",v.Local.iCnt,v.Local.sDayColumn,v.Local.sHours)			
+			f.Intrinsic.Control.EndIf		
+		f.Intrinsic.Control.Next(v.Local.iDay)
+		f.Intrinsic.Control.If(v.Local.iCnt,=,6)
+		
+		f.Intrinsic.Control.EndIf		
+		'02-HOL
+		f.Intrinsic.String.Build("Employee = '{0}' and EARNINGS_CODE = '02'",v.DataTable.WeekTime(v.Local.iCnt).Employee!FieldValString,v.Local.sFilter)
+		f.Data.DataTable.Compute("TimeAtt","Sum([Hours_HH]) + (Sum([Hours_MM])/60)",v.Local.sFilter,v.Local.fHours)
+		f.Intrinsic.Control.If(v.Local.fHours,<>,0)
+			f.Intrinsic.String.Format(v.Local.fHours,"0.00",v.Local.sHours)
+			f.Data.DataTable.SetValue("WeekTime",v.Local.iCnt,"HOL",v.Local.sHours)	
+		f.Intrinsic.Control.EndIf	
+		'03-VAC
+		f.Intrinsic.String.Build("Employee = '{0}' and EARNINGS_CODE = '03'",v.DataTable.WeekTime(v.Local.iCnt).Employee!FieldValString,v.Local.sFilter)
+		f.Data.DataTable.Compute("TimeAtt","Sum([Hours_HH]) + (Sum([Hours_MM])/60)",v.Local.sFilter,v.Local.fHours)
+		f.Intrinsic.Control.If(v.Local.fHours,<>,0)
+			f.Intrinsic.String.Format(v.Local.fHours,"0.00",v.Local.sHours)
+			f.Data.DataTable.SetValue("WeekTime",v.Local.iCnt,"VAC",v.Local.sHours)	
+		f.Intrinsic.Control.EndIf	
+		'04-SICK
+		f.Intrinsic.String.Build("Employee = '{0}' and EARNINGS_CODE = '04'",v.DataTable.WeekTime(v.Local.iCnt).Employee!FieldValString,v.Local.sFilter)
+		f.Data.DataTable.Compute("TimeAtt","Sum([Hours_HH]) + (Sum([Hours_MM])/60)",v.Local.sFilter,v.Local.fHours)
+		f.Intrinsic.Control.If(v.Local.fHours,<>,0)
+			f.Intrinsic.String.Format(v.Local.fHours,"0.00",v.Local.sHours)
+			f.Data.DataTable.SetValue("WeekTime",v.Local.iCnt,"SICK",v.Local.sHours)
+		f.Intrinsic.Control.EndIf	
+		'05-BONUS
+		f.Intrinsic.String.Build("Employee = '{0}' and EARNINGS_CODE = '05'",v.DataTable.WeekTime(v.Local.iCnt).Employee!FieldValString,v.Local.sFilter)
+		f.Data.DataTable.Compute("TimeAtt","Sum([Hours_HH]) + (Sum([Hours_MM])/60)",v.Local.sFilter,v.Local.fHours)
+		f.Intrinsic.Control.If(v.Local.fHours,<>,0)
+			f.Intrinsic.String.Format(v.Local.fHours,"0.00",v.Local.sHours)
+			f.Data.DataTable.SetValue("WeekTime",v.Local.iCnt,"BONUS",v.Local.sHours)
+		f.Intrinsic.Control.EndIf
+	f.Intrinsic.Control.Next(v.Local.iCnt)
+	
+	f.Data.DataTable.AddExpressionColumn("WeekTime","Total","float","IsNull([DAY1],0) + IsNull([DAY2],0) + IsNull([DAY3],0) + IsNull([DAY4],0) + IsNull([DAY5],0) + IsNull([DAY6],0) + IsNull([DAY7],0)")
+	f.Data.DataTable.AddExpressionColumn("WeekTime","REG","float","IIF(IsNull([Total],0) <= 40,IsNull([Total],0),40)")
+	f.Data.DataTable.AddExpressionColumn("WeekTime","OT","float","IIF(IsNull([Total],0) > 40,IsNull([Total],0) - 40,0)")	
+	
+	gui.Form.gsTime.AddGridviewFromDatatable("GVMain","WeekTime")
+	f.Intrinsic.Control.CallSub("Format_gsTime")
+	gui.Form.gsTime.MainView("GVMain")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdLoad_Click.End
+
+Program.Sub.Format_gsTime.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.iCnt.Declare
+	v.Local.sHold.Declare
+
+	gui.Form.gsTime.SuspendLayout()
+	'General format for the grid
+	gui.Form.gsTime.SetGridViewProperty("GVMain","MultiSelect",False)
+	gui.Form.gsTime.SetGridViewProperty("GVMain","AllowSort",True)
+	gui.Form.gsTime.SetGridViewProperty("GVMain","AllowFilter",True)
+	gui.Form.gsTime.SetGridViewProperty("GVMain","OptionsFindAlwaysVisible",True)
+	gui.Form.gsTime.SetGridViewProperty("GVMain","EnableAppearanceOddRow",False)
+	gui.Form.gsTime.SetGridViewProperty("GVMain","OptionsViewShowAutoFilterRow",True)
+	gui.Form.gsTime.SetGridViewProperty("GVMain","AllowColumnResizing",True)
+	gui.Form.gsTime.SetGridViewProperty("GVMain","OptionsViewColumnAutoWidth",False)	
+	gui.Form.gsTime.SetGridViewProperty("GVMain","ColumnPanelRowHeight","50")
+	'VisibleIndex
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Seq,Employee,Name,Shift,Dept_Employee,Day1,Day2,Day3,Day4,Day5,Day6,Day7,Total,REG,OT,HOL,VAC,SICK,BONUS","sProperty","VisibleIndex")	
+	'Caption
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Seq@Seq,Employee@Employeee,Name@Name,Shift@Shift,Dept_Employee@Department,Day1@Monday,Day2@Tuesday,Day3@Wednesday,Day4@Thursday,Day5@Friday,Day6@Saturday,Day7@Sunday,Total@Total,REG@Reg,OT@OT,HOL@HOL,VAC@VAC,SICK@SICK,BONUS@BONUS","sProperty","Caption")	
+	'HeaderFontBold
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Seq,Employee,Name,Shift,Dept_Employee,Day1,Day2,Day3,Day4,Day5,Day6,Day7,Total,REG,OT,HOL,VAC,SICK,BONUS","sProperty","HeaderFontBold")	
+	f.Intrinsic.Control.CallSub("FormatBulk","GS","gsTime","GV","GVMain","sInputColumns","Dept_Employee","sProperty","Invisible")
+	'HeaderHAlignment_Far	
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Seq,Shift,Dept_Employee,Day1,Day2,Day3,Day4,Day5,Day6,Day7,Total,REG,OT,HOL,VAC,SICK,BONUS","sProperty","HeaderAllign_Far")
+	'HeaderAllign_Center	
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Employee,Shift,Dept_Employee","sProperty","HeaderAllign_Center")
+	'CellHAlignment_Center
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Employee,Shift,Dept_Employee","sProperty","CellHAlignment_Center")
+	'Widths
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Seq","sProperty","Width","sWidth","45")
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Employee","sProperty","Width","sWidth","80")
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Day1,Day2,Day3,Day4,Day5,Day6,Day7,Total,REG,OT,HOL,VAC,SICK,BONUS","sProperty","Width","sWidth","90")
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Name","sProperty","Width","sWidth","220")
+	'Format Display Numeric
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsTime","GV","GVMain","sInputColumns","Day1,Day2,Day3,Day4,Day5,Day6,Day7,Total,REG,OT,HOL,VAC,SICK,BONUS","sProperty","Decimal_1")
+	
+	'Set Backcolor column
+	Gui.Form.gsTime.SetColumnProperty("GVMain","Total","CellBackColor","LightGreen")
+	Gui.Form.gsTime.SetColumnProperty("GVMain","Reg","CellBackColor","AliceBlue")
+	Gui.Form.gsTime.SetColumnProperty("GVMain","OT","CellBackColor","LightSalmon")	
+	
+	gui.Form.gsTime.ResumeLayout()
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Format_gsTime.End
+
+Program.Sub.FormatBulk.Start
+f.Intrinsic.Control.Try
+	V.Local..BulkDeclareString(sError,sColumns,sHold,sDecimalMask,sDecimal)
+	v.Local..BulkDeclareLong(iCnt)
+	v.Local.sColor.Declare
+	
+	f.Intrinsic.String.Split(v.Args.sInputColumns,",",v.Local.sColumns)
+
+	F.Intrinsic.Control.SelectCase(v.Args.sProperty)
+		
+		F.Intrinsic.Control.Case("MinWidth")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MinWidth",v.Args.sWidth)
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			
+		F.Intrinsic.Control.Case("MaxWidth")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MaxWidth",v.Args.sWidth)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Width")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Width",v.Args.sWidth)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Invisible")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Visible",False)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("VisibleIndex")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"VisibleIndex",v.Local.iCnt)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Caption")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				f.Intrinsic.String.Split(v.Local.sColumns(v.Local.iCnt),"@",v.Local.sHold)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sHold(0),"Caption",v.Local.sHold(1))			
+			f.Intrinsic.Control.Next(v.Local.iCnt)				
+
+		F.Intrinsic.Control.Case("HeaderAllign_Far")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderHAlignment","Far")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderAllign_Center")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderHAlignment","Center")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderAllign_Top")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderVAlignment","Top")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderFontBold")	
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderFontBold",True)			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderWordWrap")	
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderWordWrap","Wrap")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellHAlignment_Center")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellHAlignment","Center")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellHAlignment_Far")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellHAlignment","Far")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Decimal_1")		
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"DisplayCustomNumeric","###########.##")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			
+		f.Intrinsic.Control.Case("For_CellValue_Changed")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"AllowEdit",True)	
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"ReadOnly",False)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("For_RowCell_Click")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"AllowEdit",False)	
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"ReadOnly",True)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("DisplayCustomDatetime")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"DisplayCustomDatetime","d")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("SummaryItem")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].AddSummaryItem(v.Args.GV,v.Local.sColumns(v.Local.iCnt),v.Local.sHold,"Sum","","","n")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			f.Intrinsic.String.Build("Sum_{0}",v.Local.sColumns(v.Local.iCnt),v.Local.sHold)
+
+		f.Intrinsic.Control.Case("FixedColumn_Left")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Fixed","Left")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellBackColor")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellBackColor",v.Args.sColor)			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+	F.Intrinsic.Control.EndSelect		
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.FormatBulk.End
+
+Program.Sub.cmdExport_Click.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.sFileExport.Declare
+	V.Local.bExcel.Declare
+	V.Local.bFileLocked.Declare
+	V.Local.sMsg.Declare
+	
+	v.Local.dStart.Declare
+	v.Local.dEnd.Declare
+	
+	v.Local.dStart.Set(v.Screen.Form!dtpStart.Value)
+	v.Local.dEnd.Set(v.Screen.Form!dtpEnd.Value)
+
+	F.Automation.MSExcel.CheckPresence(V.Local.bExcel)
+
+	F.Intrinsic.Control.If(V.Local.bExcel)
+		F.Intrinsic.String.Build("{0}\{1}_{2}_{3}.xlsx",v.Global.sDefaultProcessFolder,v.Local.dStart.FormatMMDDYYYY,v.Local.dEnd.FormatMMDDYYYY,v.Ambient.Now.FormatHHNNSS,V.Local.sFileExport)
+		F.Intrinsic.File.IsFileLocked(V.Local.sFileExport,V.Local.bFileLocked)
+		F.Intrinsic.Control.If(V.Local.bFileLocked)
+			F.Intrinsic.String.Build("File is already open. Please close and export again.{0}File: {1}",V.Ambient.NewLine,V.Local.sFileExport,V.Local.sMsg)
+			F.Intrinsic.UI.Msgbox(V.Local.sMsg,"File In Use")
+		F.Intrinsic.Control.Else
+			Gui.Form.gsTime.Export(V.Local.sFileExport,"xlsx")
+			f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+				F.Intrinsic.Task.ShellExec(0,"",V.Local.sFileExport,"","",1)			
+			f.Intrinsic.Control.EndIf	
+			v.Global.sAttach.Set(v.Local.sFileExport)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Build("{0}\{1}_{2}_{3}.csv",v.Global.sDefaultProcessFolder,v.Local.dStart.FormatMMDDYYYY,v.Local.dEnd.FormatMMDDYYYY,v.Ambient.Now.FormatHHNNSS,V.Local.sFileExport)
+		F.Intrinsic.File.IsFileLocked(V.Local.sFileExport,V.Local.bFileLocked)
+		F.Intrinsic.Control.If(V.Local.bFileLocked)
+			F.Intrinsic.String.Build("File is already open. Please close and export again.{0}File: {1}",V.Ambient.NewLine,V.Local.sFileExport,V.Local.sMsg)
+			F.Intrinsic.UI.Msgbox(V.Local.sMsg,"File In Use")
+		F.Intrinsic.Control.Else
+			Gui.Form.gsTime.Export(V.Local.sFileExport,"csv")
+		F.Intrinsic.Control.EndIf
+		f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+			F.Intrinsic.Task.ShellExec(0,"",V.Local.sFileExport,"","",1)
+		f.Intrinsic.Control.EndIf
+		v.Global.sAttach.Set(v.Local.sFileExport)
+	F.Intrinsic.Control.EndIf		
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+			F.Intrinsic.UI.Msgbox(V.Local.sError)
+		f.Intrinsic.Control.Else
+			f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+			f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+		f.Intrinsic.Control.EndIf	
+		F.Intrinsic.Control.CallSub("Unload")
+	F.Intrinsic.Control.EndTry
+Program.Sub.cmdExport_Click.End
+
+Program.Sub.Check_And_Create_Custom_Folder.Start
+'v.Args.sProject
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.bEx.Declare
+	v.Local.sProjectFolder.Declare
+	v.Local.sCustomDir.Declare
+	v.Local.sCompanyCodeFolder.Declare
+	
+	'Global\Custom\WeeklyTimeAtt\CompanyCode
+	
+	'Check Global\Custom folder
+	f.Intrinsic.String.Build("{0}\Custom",V.Caller.GlobalDir,v.Local.sCustomDir)
+	f.Intrinsic.File.DirExists(v.Local.sCustomDir,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sCustomDir)
+	f.Intrinsic.Control.EndIf
+	
+	'Check Project folder 
+	f.Intrinsic.String.Build("{0}\Custom\{1}",V.Caller.GlobalDir,v.Args.sProject,v.Local.sProjectFolder)
+	f.Intrinsic.File.DirExists(v.Local.sProjectFolder,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sProjectFolder)
+	f.Intrinsic.Control.EndIf
+	
+	'Check CompanyCode folder
+	f.Intrinsic.String.Build("{0}\Custom\{1}\{2}",V.Caller.GlobalDir,v.Args.sProject,v.Caller.CompanyCode,v.Local.sCompanyCodeFolder)
+	f.Intrinsic.File.DirExists(v.Local.sCompanyCodeFolder,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sCompanyCodeFolder)
+	f.Intrinsic.Control.EndIf	
+	
+	'Set Default Process folder
+	f.Intrinsic.String.Build("{0}",v.Local.sCompanyCodeFolder,v.Global.sDefaultProcessFolder)
+	f.Intrinsic.String.Build("{0}\Log_{1}.txt",v.Local.sCompanyCodeFolder,v.Ambient.Now.FormatMMDDYYHHNNSS,v.Global.sLog)	
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	f.Intrinsic.Control.If(v.Caller.Switches,=,"O")
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("{0}{1}: {0}{2}",v.Ambient.NewLine,v.ambient.Now,v.Local.sError,v.Local.sError)
+		f.Intrinsic.File.String2File(v.Global.sLog,v.Local.sError)
+	f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Check_And_Create_Custom_Folder.End
+
+
