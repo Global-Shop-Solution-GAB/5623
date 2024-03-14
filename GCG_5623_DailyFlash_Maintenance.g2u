@@ -1,0 +1,389 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Size(8040,10020)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form..Caption("Emails for Daily Flash Report")
+Gui.Form.lbl1.Create(Label,"Name",True,660,255,0,240,825,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl2.Create(Label,"Emails",True,660,255,0,3600,825,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtName.Create(TextBox,"",True,3120,300,0,240,1035,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtName.MaxLength(30)
+Gui.Form.txtName.TabStop(True)
+Gui.Form.txtName.TabIndex(2)
+Gui.Form.txtEmail.Create(TextBox,"",True,3165,300,0,3630,1035,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtEmail.MaxLength(200)
+Gui.Form.txtEmail.TabStop(True)
+Gui.Form.txtEmail.TabIndex(3)
+Gui.Form.gsEmails.Create(GsGridControl)
+Gui.Form.gsEmails.Size(7560,6690)
+Gui.Form.gsEmails.Position(240,2295)
+Gui.Form.gsEmails.Event(RowCellClick,gsEmails_RowCellClick)
+Gui.Form.gsEmails.TabStop(True)
+Gui.Form.gsEmails.TabIndex(6)
+Gui.Form.cmdAdd.Create(Button)
+Gui.Form.cmdAdd.Size(855,375)
+Gui.Form.cmdAdd.Position(240,1485)
+Gui.Form.cmdAdd.Caption("Add")
+Gui.Form.cmdAdd.Event(Click,cmdAdd_Click)
+Gui.Form.cmdAdd.TabStop(True)
+Gui.Form.cmdAdd.TabIndex(5)
+Gui.Form.cmdBrowseEmails.Create(Button)
+Gui.Form.cmdBrowseEmails.Size(855,375)
+Gui.Form.cmdBrowseEmails.Position(6960,990)
+Gui.Form.cmdBrowseEmails.Caption("^")
+Gui.Form.cmdBrowseEmails.Event(Click,cmdBrowseEmails_Click)
+Gui.Form.cmdBrowseEmails.TabStop(True)
+Gui.Form.cmdBrowseEmails.TabIndex(4)
+Gui.Form.cmdSave.Create(Button)
+Gui.Form.cmdSave.Size(855,375)
+Gui.Form.cmdSave.Position(225,9090)
+Gui.Form.cmdSave.Caption("Save")
+Gui.Form.cmdSave.Event(Click,cmdSave_Click)
+Gui.Form.cmdSave.TabStop(True)
+Gui.Form.cmdSave.TabIndex(7)
+Gui.Form.lbl3.Create(Label,"Sender Email",True,660,255,0,255,165,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtSender.Create(TextBox,"",True,3120,300,0,255,375,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtSender.MaxLength(200)
+Gui.Form.txtSender.TabStop(True)
+Gui.Form.txtSender.TabIndex(1)
+Gui.Form.lbl4.Create(Label,"Manager Emails",True,1440,255,0,255,2070,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.sDefaultProcessFolder.Declare
+v.Global.sAttach.Declare
+v.Global.sLog.Declare
+v.Global.sEmailsFile.Declare
+v.Global.sEmails.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, Mar 2019
+'Maintenance Program: configure emails to be sent out the weekly report
+'Customer: P & S Machine & Fabrication
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sRet.Declare
+	
+	f.ODBC.Connection!conx.OpenCompanyConnection	
+	'set Sender Email
+	f.ODBC.Connection!conx.ExecuteAndReturn("Select Email from GCG_5623_DailyFlash_Email where Name = '~Sender~'",v.Local.sRet)
+	gui.Form.txtSender.Text(v.Local.sRet.Trim)
+	
+	'Create Manager Emails table and grid
+	f.Data.DataTable.CreateFromSQL("Emails","conx","Select Name,Email from GCG_5623_DailyFlash_Email where Name <> '~Sender~' order by Name",True)
+	f.Data.DataTable.AddColumn("Emails","Delete","String","Delete")
+	f.Data.DataView.Create("Emails","EmailsDV")	
+	gui.Form.gsEmails.AddGridviewFromDatatable("GVMain","Emails")
+	f.Intrinsic.Control.CallSub("Format_gsEmails")
+	gui.Form.gsEmails.MainView("GVMain")
+	
+	gui.Form..Show		
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)	
+	f.Intrinsic.UI.Msgbox(v.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+
+Program.Sub.Main.End
+
+Program.Sub.Form_UnLoad.Start
+f.Intrinsic.Control.CallSub("Unload")
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.UnLoad.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.conx.State,=,1)
+		F.ODBC.Connection!conx.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.UnLoad.End
+
+Program.Sub.gsEmails_RowCellClick.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sColumn.Declare
+	
+	f.Intrinsic.String.UCase(v.Args.Column,v.Local.sColumn)
+	f.Intrinsic.Control.If(v.Local.sColumn,=,"DELETE")
+		F.Data.DataTable.DeleteRow("Emails",v.Args.RowIndex)
+		f.Data.DataTable.AcceptChanges("Emails")
+	f.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Current Subroutine: {2}{1}Subroutine Called From: {3}{1}Error Occurred {4}{1}Error description: {5}{1}GAB Version: {6}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,v.Ambient.SubroutineCalledFrom,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.gsEmails_RowCellClick.End
+
+Program.Sub.cmdAdd_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sName.Declare
+	v.Local.sEmail.Declare
+	v.Local.bValidEmail.Declare
+
+	v.Local.sName.Set(v.Screen.Form!txtName.Text.Trim)
+	v.Local.sEmail.Set(v.Screen.Form!txtEmail.Text.Trim)
+	
+	'Validate Name
+	f.Intrinsic.Control.If(v.Local.sName.Trim,=,"")
+		f.Intrinsic.UI.Msgbox("Empty Name")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	'Validate Email
+	f.Global.Messaging.IsAddressValid(v.Local.sEmail,v.Local.bValidEmail)
+	f.Intrinsic.Control.If(v.Local.bValidEmail.Not)
+		f.Intrinsic.UI.Msgbox("Invalid Email")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	'Add row to table
+	f.Data.DataTable.AddRow("Emails","Name",v.Local.sName.PSQLFriendly,"Email",v.Local.sEmail.PSQLFriendly,"Delete","Delete")
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Current Subroutine: {2}{1}Subroutine Called From: {3}{1}Error Occurred {4}{1}Error description: {5}{1}GAB Version: {6}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,v.Ambient.SubroutineCalledFrom,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdAdd_Click.End
+
+Program.Sub.cmdBrowseEmails_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sRet.Declare
+	
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(true)
+	F.Intrinsic.UI.Browser("Employee Email","conx","Select Employee,Name,rtrim(EMAIL_ADDR) as Email from Employee_MSTR order by Name,Email","Employee*!*Name*!*Email","200*!*500*!*500",Variable.Local.sRet)
+	
+	'Check if you choose any record from the result
+	F.Intrinsic.Control.If(Variable.Local.sRet.IsCancel)
+		F.Intrinsic.UI.Msgbox("You select NOTHING!")
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Split(Variable.Local.sRet,"*!*",Variable.Local.sRet)
+		gui.Form.txtEmail.Text(v.Local.sRet(2).Trim)
+		gui.Form.txtName.Text(v.Local.sRet(1).Trim)
+	F.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Current Subroutine: {2}{1}Subroutine Called From: {3}{1}Error Occurred {4}{1}Error description: {5}{1}GAB Version: {6}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,v.Ambient.SubroutineCalledFrom,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdBrowseEmails_Click.End
+
+Program.Sub.cmdSave_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.iCnt.Declare
+	v.Local.sSQL.Declare
+	v.Local.sSender.Declare
+	v.Local.bValidEmail.Declare	
+	
+	f.Intrinsic.UI.InvokeWaitDialog("Saving...")
+	
+	'Validate Sender Email
+	v.Local.sSender.Set(v.Screen.Form!txtSender.Text.Trim)
+	f.Global.Messaging.IsAddressValid(v.Local.sSender,v.Local.bValidEmail)
+	f.Intrinsic.Control.If(v.Local.bValidEmail.Not)
+		f.Intrinsic.UI.Msgbox("Invalid Sender Email")
+		f.Intrinsic.UI.CloseWaitDialog
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf	
+	
+	f.ODBC.Connection!conx.Execute("Delete from GCG_5623_DailyFlash_Email")
+	'Save Sender
+	f.Intrinsic.String.Build("Insert into GCG_5623_DailyFlash_Email (Name,Email) values ('~Sender~','{0}')",v.Local.sSender,v.Local.sSQL)
+	f.ODBC.Connection!conx.Execute(v.Local.sSQL)	
+	'Save Manager Emails
+	f.Intrinsic.Control.For(v.Local.iCnt,0,v.DataTable.Emails.RowCount--,1)
+		f.Intrinsic.String.Build("Insert into GCG_5623_DailyFlash_Email (Name,Email) values ('{0}','{1}')",v.DataTable.Emails(v.Local.iCnt).Name!FieldValTrim,v.DataTable.Emails(v.Local.iCnt).Email!FieldValTrim,v.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+	f.Intrinsic.Control.Next(v.Local.iCnt)
+	f.Intrinsic.UI.CloseWaitDialog
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	f.Intrinsic.UI.Msgbox(v.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+
+Program.Sub.Format_gsEmails.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.iCnt.Declare
+	v.Local.sHold.Declare
+	
+	gui.Form.gsEmails.SuspendLayout()
+	'General format for the grid
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","MultiSelect",False)
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","AllowSort",True)
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","AllowFilter",True)
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","OptionsFindAlwaysVisible",True)
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","EnableAppearanceOddRow",False)
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","OptionsViewShowAutoFilterRow",True)
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","AllowColumnResizing",True)
+	gui.Form.gsEmails.SetGridViewProperty("GVMain","OptionsViewColumnAutoWidth",False)	
+	'VisibleIndex
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsEmails","GV","GVMain","sInputColumns","Name,Email,Delete","sProperty","VisibleIndex")	
+	'HeaderFontBold
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsEmails","GV","GVMain","sInputColumns","Name,Email,Delete","sProperty","HeaderFontBold")	
+	'HeaderAllign_Center	
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsEmails","GV","GVMain","sInputColumns","Delete","sProperty","HeaderAllign_Center")
+	'CellHAlignment_Center
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsEmails","GV","GVMain","sInputColumns","Delete","sProperty","CellHAlignment_Center")
+	'For_RowCell_Click
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsEmails","GV","GVMain","sInputColumns","Delete","sProperty","For_RowCell_Click")
+	'Widths
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsEmails","GV","GVMain","sInputColumns","Delete","sProperty","Width","sWidth","45")
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsEmails","GV","GVMain","sInputColumns","Name,Email","sProperty","Width","sWidth","210")
+	'Editor
+		'Editor button
+	gui.Form.gsEmails.ColumnEdit("GVMain","Delete","editorbutton","Delete")
+	
+	gui.Form.gsEmails.ResumeLayout()
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	f.Intrinsic.UI.Msgbox(v.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Format_gsEmails.End
+
+Program.Sub.FormatBulk.Start
+f.Intrinsic.Control.Try
+	V.Local..BulkDeclareString(sError,sColumns,sHold,sDecimalMask,sDecimal)
+	v.Local..BulkDeclareLong(iCnt)
+	v.Local.sColor.Declare
+	
+	f.Intrinsic.String.Split(v.Args.sInputColumns,",",v.Local.sColumns)
+
+	F.Intrinsic.Control.SelectCase(v.Args.sProperty)
+		
+		F.Intrinsic.Control.Case("MinWidth")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MinWidth",v.Args.sWidth)
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			
+		F.Intrinsic.Control.Case("MaxWidth")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MaxWidth",v.Args.sWidth)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Width")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Width",v.Args.sWidth)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Invisible")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Visible",False)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("VisibleIndex")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"VisibleIndex",v.Local.iCnt)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Caption")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				f.Intrinsic.String.Split(v.Local.sColumns(v.Local.iCnt),"@",v.Local.sHold)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sHold(0),"Caption",v.Local.sHold(1))			
+			f.Intrinsic.Control.Next(v.Local.iCnt)				
+
+		F.Intrinsic.Control.Case("HeaderAllign_Far")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderHAlignment","Far")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderAllign_Center")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderHAlignment","Center")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderAllign_Top")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderVAlignment","Top")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderFontBold")	
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderFontBold",True)			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderWordWrap")	
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderWordWrap","Wrap")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellHAlignment_Center")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellHAlignment","Center")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellHAlignment_Far")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellHAlignment","Far")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Decimal_1")		
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"DisplayCustomNumeric","###########.##")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			
+		f.Intrinsic.Control.Case("For_CellValue_Changed")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"AllowEdit",True)	
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"ReadOnly",False)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("For_RowCell_Click")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"AllowEdit",False)	
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"ReadOnly",True)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("DisplayCustomDatetime")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"DisplayCustomDatetime","d")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("SummaryItem")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].AddSummaryItem(v.Args.GV,v.Local.sColumns(v.Local.iCnt),v.Local.sHold,"Sum","","","n")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			f.Intrinsic.String.Build("Sum_{0}",v.Local.sColumns(v.Local.iCnt),v.Local.sHold)
+
+		f.Intrinsic.Control.Case("FixedColumn_Left")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Fixed","Left")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellBackColor")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellBackColor",v.Args.sColor)			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+	F.Intrinsic.Control.EndSelect		
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	f.Intrinsic.UI.Msgbox(v.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.FormatBulk.End
